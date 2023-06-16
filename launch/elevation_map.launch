@@ -1,0 +1,37 @@
+<launch>
+
+
+  <!-- <node pkg="tf" type="static_transform_publisher" name="world_to_camera_init" args="0 0 0 0 0 0 /world /camera_init 10" /> -->
+  <!-- <node pkg="tf" type="static_transform_publisher" name="camera_to_link" args="0 0 -0.25 0 0 0 /aft_mapped /base_link 10" /> -->
+
+
+  <!-- Elevation mapping node -->
+  <node pkg="elevation_mapping" type="elevation_mapping" name="elevation_mapping" output="screen">
+    <rosparam command="load" file="$(find elevation_mapping_demos)/config/robots/clearpath_robot.yaml" />
+    <rosparam command="load" file="$(find elevation_mapping_demos)/config/elevation_maps/simple_demo_map.yaml" />
+    <!-- <rosparam command="load" file="$(find elevation_mapping_demos)/config/robots/jackal_demo.yaml" /> -->
+    <!-- <rosparam command="load" file="$(find elevation_mapping_demos)/config/elevation_maps/jackal_demo_map.yaml" /> -->
+    <rosparam command="load" file="$(find elevation_mapping_demos)/config/postprocessing/postprocessor_pipeline.yaml" />
+  </node>
+
+  <!-- Publish some points -->
+  <!-- <node pkg="point_cloud_io" type="read" name="read_ply" output="screen">
+    <param name="file_path" value="$(find elevation_mapping_demos)/sample_data/maze.ply" />
+    <param name="topic" value="/scan" />
+    <param name="frame" value="map" />
+    <param name="rate" value="1.0" />
+  </node> -->
+
+  <!-- Setup a transform between the world and the robot -->
+  <!-- <node pkg="tf" type="static_transform_publisher" name="world_to_robot" args="2.0 6.0 0 0 0.0 0 /map /base 100"/> -->
+  <!-- <node pkg="tf" type="static_transform_publisher" name="map_to_link" args="0 0 0 0 0 0 /world /base_link 100" /> -->
+
+  <!-- Launch visualizations for the resulting elevation map -->
+  <include file="$(find elevation_mapping_demos)/launch/visualization.launch" />
+
+  <!-- END Elevation mapping -->
+
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rrt_package)/rviz_config/rrt.rviz" required="true"/>
+
+</launch>
