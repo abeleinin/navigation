@@ -9,7 +9,7 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
 from visualization_msgs.msg import Marker
 
-from env_elevation_map import EnvElevationMap
+from env_matrix import EnvElevationMap
 
 class Node:
     def __init__(self, point):
@@ -21,14 +21,14 @@ class RRT:
     def __init__(self, step_len, iter_max):
       self.env = EnvElevationMap()
       # self.init = rospy.init_node("rrt")
-      self.frame = "base_link"
+      self.frame = "world"
 
-      self.path_pub = rospy.Publisher("/base_link/path", Path, queue_size=10)
+      self.path_pub = rospy.Publisher("/world/path", Path, queue_size=10)
 
       # q = tf.transformations.quaternion_from_euler(0, 0, 1)
       # world_quaternion = Quaternion(q[0], q[1], q[2], q[3])
 
-      self.marker_pub = rospy.Publisher('/base_link/nodes', Marker, queue_size=10)
+      self.marker_pub = rospy.Publisher('/world/nodes', Marker, queue_size=10)
       self.marker = Marker()
       self.marker.header.frame_id = self.frame
       self.marker.type = Marker.POINTS
@@ -39,7 +39,7 @@ class RRT:
       self.marker.color.a = 1.0
       self.marker.color.g = 1.0
 
-      self.marker_tree_pub = rospy.Publisher('/base_link/tree', Marker, queue_size=10)
+      self.marker_tree_pub = rospy.Publisher('/world/tree', Marker, queue_size=10)
       self.marker_tree = Marker()
       self.marker_tree.header.frame_id = self.frame
       self.marker_tree.type = Marker.LINE_LIST
@@ -51,7 +51,7 @@ class RRT:
       self.marker_tree.color.r = 1.0
       self.marker_tree.color.g = 0.6
 
-      self.marker_dest_pub = rospy.Publisher('/base_link/dest', Marker, queue_size=10)
+      self.marker_dest_pub = rospy.Publisher('/world/dest', Marker, queue_size=10)
       self.marker_dest = Marker()
       self.marker_dest.header.frame_id = self.frame
       self.marker_dest.type = Marker.POINTS
@@ -63,7 +63,7 @@ class RRT:
       self.marker_dest.color.r = 1.0
       self.marker_dest.color.g = 1.0
 
-      self.testing_pub = rospy.Publisher('/base_link/bresenham', Marker, queue_size=10)
+      self.testing_pub = rospy.Publisher('/world/bresenham', Marker, queue_size=10)
       self.testing = Marker()
       self.testing.header.frame_id = self.frame
       self.testing.type = Marker.POINTS
@@ -74,7 +74,7 @@ class RRT:
       self.testing.color.a = 1.0
       self.testing.color.b = 1.0
 
-      self.start_point = self.env.robot_pose.position # Start
+      self.start_point = Point(0, 0, 0) # self.env.robot_pose.position # Start
       self.goal_point = Point(5, -5, 0) # Goal
 
       self.marker_dest.points.append(self.start_point)
@@ -84,9 +84,9 @@ class RRT:
       self.goal_node = Node(self.goal_point)
       self.marker.points.append(self.start_point)
 
-      self.map_x_range = [-self.env.map_x_range, self.env.map_x_range]
-      self.map_y_range = [-self.env.map_y_range, self.env.map_y_range]
-      self.limit = 0.05
+      self.map_x_range = [self.env.x_min, self.env.x_max]
+      self.map_y_range = [self.env.y_min, self.env.y_max]
+      self.limit = 0.1
 
       self.step_len = step_len
       self.iter_max = iter_max

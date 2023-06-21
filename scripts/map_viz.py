@@ -8,7 +8,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from grid_map_msgs.msg import GridMap
 
 # topic = '/elevation_mapping/elevation_map'
-topic = '/elevation_mapping/elevation_map_raw'
+topic = '/elevation_mapping/elevation_map'
 
 class EnvElevationMap:
   def __init__(self):
@@ -32,7 +32,6 @@ class EnvElevationMap:
     self.marker.scale.y = 0.1
     self.marker.color.a = 1.0
     self.marker.color.r = 1.0
-    rospy.sleep(1)
 
     rospy.wait_for_message(topic, GridMap)
 
@@ -76,7 +75,7 @@ class EnvElevationMap:
           self.elevation_matrix[i][j] = round(height, 2)
     
     self.marker.points = []
-    self.elevation_matrix = self.fix(np.array(self.elevation_matrix), self.row_start, self.column_start)
+    # self.elevation_matrix = self.fix(np.array(self.elevation_matrix), self.row_start, self.column_start)
     self.rot_matrix = np.rot90(np.flipud(self.elevation_matrix))
 
     for x in range(self.row_size):

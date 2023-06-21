@@ -162,16 +162,7 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  scripts/arena.py
-  scripts/rrt_function.py
-  scripts/rrt_function_3d.py
-  scripts/rrt_elevation_map.py
-  scripts/simple_rrt/rrt.py
-  scripts/simple_rrt/viz.py
-  scripts/simple_rrt/env_2d.py
-  scripts/simple_rrt/plotting.py
-  scripts/simple_rrt/rrt_3d.py
-  scripts/simple_rrt/env_3d.py
+  # Add python script path here
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
