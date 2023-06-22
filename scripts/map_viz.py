@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import os 
+import yaml
+from yaml.loader import SafeLoader
 
 import rospy
 import math
@@ -20,6 +23,12 @@ class EnvElevationMap:
     self.x_range = None
     self.y_range = None
 
+    self.resolution = None
+    self.x_length = None
+    self.y_length = None
+
+    self.get_map_params()
+
     self.elevation_map_subscriber = rospy.Subscriber(topic, GridMap, self.elevation_map_callback) 
 
     self.marker_pub = rospy.Publisher('/elevation_nodes', Marker, queue_size=10)
@@ -34,6 +43,15 @@ class EnvElevationMap:
     self.marker.color.r = 1.0
 
     rospy.wait_for_message(topic, GridMap)
+
+  def get_map_params(self):
+    curr_dir = os.getcwd()
+    path = os.path.join(curr_dir, "..", "config/elevation_maps/simple_demo_map.yaml")
+    with open(path) as f:
+        data = yaml.load(f, Loader=SafeLoader)
+        self.resolution = data['resolution']
+        self.x_length = data['length_in_x']
+        self.y_length = data['length_in_y']
 
   def elevation_map_callback(self, grid_map):
     self.elevation_map = grid_map.data[0]
@@ -70,21 +88,21 @@ class EnvElevationMap:
         index = self.row_stride * i + j
         height = self.elevation_map[index]
         if math.isnan(height):
-          self.elevation_matrix[i][j] = -1
+          self.elevation_matrix[i][j] = 0
         else:
           self.elevation_matrix[i][j] = round(height, 2)
     
     self.marker.points = []
     # self.elevation_matrix = self.fix(np.array(self.elevation_matrix), self.row_start, self.column_start)
-    self.rot_matrix = np.rot90(np.flipud(self.elevation_matrix))
+    # self.rot_matrix = np.rot90(np.flipud(self.elevation_matrix))
 
     for x in range(self.row_size):
       for y in range(self.column_size):
-        height = self.rot_matrix[x][y]
-        # height = self.elevation_matrix[x][y]
-        self.marker.points.append(Point(self.scale(x, 0, self.column_size, -1.5, 1.5) + (self.resolution / 2) + self.robot_pos.position.x, 
-                                        self.scale(y, 0, self.row_size, -1.5, 1.5) + (self.resolution / 2) + self.robot_pos.position.y,
-                                          height))
+        # height = self.rot_matrix[x][y]
+        height = self.elevation_matrix[x][y]
+        self.marker.points.append(Point(self.scale(x, 0, self.column_size - 1, -self.y_length / 2, self.y_length / 2) + (self.resolution / 2) + self.robot_pos.position.x, 
+                                        self.scale(y, 0, self.row_size - 1, self.x_length / 2, -self.x_length / 2) + (self.resolution / 2) + self.robot_pos.position.y,
+                                        height))
 
     self.marker_pub.publish(self.marker) 
 
@@ -102,9 +120,9 @@ if __name__ == '__main__':
   print("elevation matrix")
   for row in env.elevation_matrix:
     print(row)
-  print("rotation matrix")
-  for row in env.rot_matrix:
-    print(row)
+  # print("rotation matrix")
+  # for row in env.rot_matrix:
+  #   print(row)
   while not rospy.is_shutdown():
     env.marker_pub.publish(env.marker)
 

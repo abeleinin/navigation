@@ -10,6 +10,7 @@ from geometry_msgs.msg import Point, PoseStamped, Quaternion
 from visualization_msgs.msg import Marker
 
 from env_matrix import EnvElevationMap
+from robot_odom import robotOdom
 
 class Node:
     def __init__(self, point):
@@ -20,6 +21,7 @@ class Node:
 class RRT:
     def __init__(self, step_len, iter_max):
       self.env = EnvElevationMap()
+      self.jackal = robotOdom()
       # self.init = rospy.init_node("rrt")
       self.frame = "world"
 
@@ -74,8 +76,8 @@ class RRT:
       self.testing.color.a = 1.0
       self.testing.color.b = 1.0
 
-      self.start_point = Point(0, 0, 0) # self.env.robot_pose.position # Start
-      self.goal_point = Point(5, -5, 0) # Goal
+      self.start_point = self.jackal.position # Robot position 
+      self.goal_point = Point(0, -5, 0) # Goal
 
       self.marker_dest.points.append(self.start_point)
       self.marker_dest.points.append(self.goal_point)
@@ -103,8 +105,8 @@ class RRT:
           print(i)
         # if math.log(count, 3).is_integer():
         #   self.step_len *= 1
-        front_path = self.generate_leafs(3, 0, self.front_parent, self.front_leaves)
-        back_path = self.generate_leafs(3, 180, self.back_parent, self.back_leaves)
+        front_path = self.generate_leafs(3, 0 + self.jackal.yaw, self.front_parent, self.front_leaves)
+        back_path = self.generate_leafs(3, 180 + self.jackal.yaw, self.back_parent, self.back_leaves)
 
         if front_path != None:
           return front_path
@@ -114,6 +116,7 @@ class RRT:
         # self.front_parent = self.front_leaves.pop(0)
         # self.back_parent = self.back_leaves.pop(0)
         if len(self.front_leaves) == 0 or len(self.back_leaves) == 0:
+          print("ZERO NOT GOOD")
           continue
         self.front_parent = self.front_leaves.pop(random.randint(0, len(self.front_leaves) - 1))
         self.back_parent = self.back_leaves.pop(random.randint(0, len(self.back_leaves) - 1))
@@ -224,7 +227,7 @@ class RRT:
           return True
         elif self.env.elevation_matrix[x][y] > self.limit:
           return True
-        print("height:", round(self.env.elevation_matrix[x][y], 2))
+        # print("height:", round(self.env.elevation_matrix[x][y], 2))
       self.testing_pub.publish(self.testing)
       return False
 
@@ -242,7 +245,6 @@ class RRT:
         path.insert(0, new_node)
 
       return path
-      # return path.reverse()
 
     def get_distance_and_angle(self, node_start, node_end):
       dx = node_end.point.x - node_start.point.x
