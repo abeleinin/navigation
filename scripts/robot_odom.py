@@ -3,7 +3,6 @@ import math
 import rospy
 import tf.transformations as tft
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion
 
 class robotOdom:
   def __init__(self):

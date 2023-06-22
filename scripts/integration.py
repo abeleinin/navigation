@@ -4,181 +4,177 @@ import math
 import random
 import rospy
 
-import tf
 from nav_msgs.msg import Path  
-from geometry_msgs.msg import Point, PoseStamped, Quaternion
+from std_msgs.msg import ColorRGBA
+from geometry_msgs.msg import Point, PoseStamped, Vector3
 from visualization_msgs.msg import Marker
 
-from env_matrix import EnvElevationMap
+from process_map import elevationMap
 from robot_odom import robotOdom
 
 class Node:
-    def __init__(self, point):
-      self.point = point # Point
+    def __init__(self, point: Point):
+      self.point = point 
       self.angle = 0
       self.parent = None
 
 class RRT:
-    def __init__(self, step_len, iter_max):
-      self.env = EnvElevationMap()
+    def __init__(self, step_len, iter_max, elev_limit, goal):
+      self.init = rospy.init_node('rrt')
+
+      # retrieve environmental and robot information
+      self.map = elevationMap()
       self.jackal = robotOdom()
-      # self.init = rospy.init_node("rrt")
-      self.frame = "world"
 
-      self.path_pub = rospy.Publisher("/world/path", Path, queue_size=10)
+      # rrt parameters
+      self.step_len = step_len
+      self.iter_max = iter_max
+      self.limit = elev_limit
+      self.goal_point = goal
+      self.start_point = self.jackal.position 
 
-      # q = tf.transformations.quaternion_from_euler(0, 0, 1)
-      # world_quaternion = Quaternion(q[0], q[1], q[2], q[3])
+      # rrt global variables
+      self.start_node = Node(self.start_point)
+      self.goal_node = Node(self.goal_point)
+      self.front_parent = self.start_node
+      self.back_parent = self.start_node
+      self.front_leaves = []
+      self.back_leaves = []
 
+      ### Publishers ###
+      self.frame = 'world'
+      self.path_pub = rospy.Publisher('/world/path', Path, queue_size=10)
+
+      # All nodes
       self.marker_pub = rospy.Publisher('/world/nodes', Marker, queue_size=10)
       self.marker = Marker()
       self.marker.header.frame_id = self.frame
       self.marker.type = Marker.POINTS
       self.marker.action = Marker.ADD 
       self.marker.pose.orientation.w = 1.0
-      self.marker.scale.x = 0.1
-      self.marker.scale.y = 0.1
-      self.marker.color.a = 1.0
-      self.marker.color.g = 1.0
+      self.marker.scale = Vector3(0.1, 0.1, 0)
+      self.marker.color = ColorRGBA(0, 1, 0, 1) # red
+      self.marker.points.append(self.start_point)
 
+      # rrt tree 
       self.marker_tree_pub = rospy.Publisher('/world/tree', Marker, queue_size=10)
       self.marker_tree = Marker()
       self.marker_tree.header.frame_id = self.frame
       self.marker_tree.type = Marker.LINE_LIST
       self.marker_tree.action = Marker.ADD 
       self.marker_tree.pose.orientation.w = 1.0
-      self.marker_tree.scale.x = 0.03
-      self.marker_tree.scale.y = 0.03
-      self.marker_tree.color.a = 1.0
-      self.marker_tree.color.r = 1.0
-      self.marker_tree.color.g = 0.6
+      self.marker_tree.scale = Vector3(0.03, 0.03, 0)
+      self.marker_tree.color = ColorRGBA(1, 0.6, 0, 1) # orange
 
+      # start and goal nodes (Large Yellow S)
       self.marker_dest_pub = rospy.Publisher('/world/dest', Marker, queue_size=10)
       self.marker_dest = Marker()
       self.marker_dest.header.frame_id = self.frame
       self.marker_dest.type = Marker.POINTS
       self.marker_dest.action = Marker.ADD 
       self.marker_dest.pose.orientation.w = 1.0
-      self.marker_dest.scale.x = 0.3
-      self.marker_dest.scale.y = 0.3
-      self.marker_dest.color.a = 1.0
-      self.marker_dest.color.r = 1.0
-      self.marker_dest.color.g = 1.0
-
-      self.testing_pub = rospy.Publisher('/world/bresenham', Marker, queue_size=10)
-      self.testing = Marker()
-      self.testing.header.frame_id = self.frame
-      self.testing.type = Marker.POINTS
-      self.testing.action = Marker.ADD 
-      self.testing.pose.orientation.w = 1.0
-      self.testing.scale.x = 0.1
-      self.testing.scale.y = 0.1
-      self.testing.color.a = 1.0
-      self.testing.color.b = 1.0
-
-      self.start_point = self.jackal.position # Robot position 
-      self.goal_point = Point(5, -5, 0) # Goal
-
+      self.marker_dest.scale = Vector3(0.3, 0.3, 0)
+      self.marker_dest.color = ColorRGBA(1, 1, 0, 1) # yellow
       self.marker_dest.points.append(self.start_point)
       self.marker_dest.points.append(self.goal_point)
 
-      self.start_node = Node(self.start_point)
-      self.goal_node = Node(self.goal_point)
-      self.marker.points.append(self.start_point)
-
-      self.map_x_range = [self.env.x_min, self.env.x_max]
-      self.map_y_range = [self.env.y_min, self.env.y_max]
-      self.limit = 0.1
-
-      self.step_len = step_len
-      self.iter_max = iter_max
-      self.nodes = [self.start_node]
-      self.front_parent = self.start_node
-      self.back_parent = self.start_node
-      self.front_leaves = []
-      self.back_leaves = []
+      # bresenham points created during branch collision checking
+      self.bresenham_pub = rospy.Publisher('/world/bresenham', Marker, queue_size=10)
+      self.bresenham = Marker()
+      self.bresenham.header.frame_id = self.frame
+      self.bresenham.type = Marker.POINTS
+      self.bresenham.action = Marker.ADD 
+      self.bresenham.pose.orientation.w = 1.0
+      self.bresenham.scale = Vector3(0.1, 0.1, 0)
+      self.bresenham.color = ColorRGBA(0, 0, 1, 1) # blue
      
     def planning(self):
-      count = 1
       for i in range(self.iter_max):
-        if i % 100 == 0:
-          print(i)
-        # if math.log(count, 3).is_integer():
-        #   self.step_len *= 1
+        if i % 10 == 0:
+          rospy.loginfo('Planning iteration: ' + str(i))
 
-        # Find path in front of robot or behind 
+        # find path in front or behind robot
         if self.front_parent != None:
           front_path = self.generate_leafs(3, 0 + self.jackal.yaw, self.front_parent, self.front_leaves)
         if self.back_parent != None:
           back_path = self.generate_leafs(3, 180 + self.jackal.yaw, self.back_parent, self.back_leaves)
 
-        # Check if a path was found
+        # check if a path was found
         if front_path != None:
           return front_path
         elif back_path != None:
           return back_path
 
-        # Random Leaf Node Selection 
-        # Determine the next parent node. If leaves list is empty then all leaves lead to a collision.
+        # random leaf selection 
+        # determine the next parent node. if leaves list is empty then all leaves lead to a collision.
         self.front_parent = self.front_leaves.pop(random.randint(0, len(self.front_leaves) - 1)) if self.front_leaves else None
         self.back_parent = self.back_leaves.pop(random.randint(0, len(self.back_leaves) - 1)) if self.back_leaves else None
 
-        # Sequential Leaf Node Selection
+        # sequential leaf selection
         # self.front_parent = self.front_leaves.pop(0)
         # self.back_parent = self.back_leaves.pop(0)
 
-        count += 1
-
       return None
     
-    def generate_leafs(self, num, direction, curr_parent, leaves):
+    def generate_leafs(self, branching, orientation, curr_parent, leaves):
+      # generate random angles separated by delta
       delta = 15
-      angles = [] # Random angles 
-      while len(angles) < num:
+      angles = [] 
+      while len(angles) < branching:
         new_angle = random.randint(-45, 45)
         if all(abs(new_angle - existing_angle) >= delta for existing_angle in angles):
           angles.append(new_angle)
-      # angles = [-60, -45, 0, 45, 60] # Set angels
+      # set angels
+      # angles = [-60, -45, 0, 45, 60] 
       for angle in angles:
-        x = curr_parent.point.x + self.step_len * math.cos(math.radians(angle + curr_parent.angle + direction))
-        y = curr_parent.point.y + self.step_len * math.sin(math.radians(angle + curr_parent.angle + direction))
+        # calculate new Point(x, y) values for a branch of length step_len at the specified angle using trig 
+        x = curr_parent.point.x + self.step_len * math.cos(math.radians(angle + curr_parent.angle + orientation))
+        y = curr_parent.point.y + self.step_len * math.sin(math.radians(angle + curr_parent.angle + orientation))
         new_node = Node(Point(x, y, 0.05))
         new_node.parent = curr_parent
         new_node.angle = angle + curr_parent.angle
+        
+        # check for collision between the new line segment created and the elevation map
         collision = self.is_collision(new_node)
         if collision:
-          print("collision")
-          return None
-        self.nodes.append(new_node)
+          continue
+
+        # add to visualization arrays 
         self.marker_tree.points.append(Point(new_node.point.x, new_node.point.y, 0.05))
         self.marker_tree.points.append(Point(new_node.parent.point.x, new_node.parent.point.y, 0.05))
         self.marker_tree_pub.publish(self.marker_tree)
         self.marker_dest_pub.publish(self.marker_dest)
+        # sleep for visualization purposes
         rospy.sleep(0.04)
-        dist, _ = self.get_distance_and_angle(new_node, self.goal_node)
 
+        # calculate euclidean distance from the new node to the goal
+        dist, _ = self.get_distance_and_angle(new_node, self.goal_node)
         if dist <= self.step_len:
           dist, theta = self.get_distance_and_angle(new_node, self.goal_node)
 
           dist = min(self.step_len, dist)
-          point_new = Point()
-          point_new.x = new_node.point.x + dist * math.cos(theta)
-          point_new.y = new_node.point.y + dist * math.sin(theta)
-          point_new.z = 0
-
-          final = Node(point_new)
-          final.parent = new_node
+          # create final node
+          final_point = Point(new_node.point.x + dist * math.cos(theta), 
+                              new_node.point.y + dist * math.sin(theta), 0)
+          # ??? isn't final_node just the goal node
+          # ??? new_node.parent might be more correct (test)
+          final_node = Node(final_point)
+          final_node.parent = new_node
+          # add to visualization arrays
           self.marker_tree.points.append(new_node.parent.point)
-          self.marker_tree.points.append(final.point)
+          self.marker_tree.points.append(final_node.point)
+          # return the list of nodes to goal found by recursing through each nodes parent
           return self.extract_path(new_node)
-        leaves.append(new_node)
+        else: 
+          # appends to list of all possible leaf nodes
+          leaves.append(new_node)
       return None
 
     def coord_to_matrix(self, node):
-        x = round(self.env.scale(node.point.x, self.map_x_range[0], self.map_x_range[1], 0, 99))
-        y = round(self.env.scale(node.point.y, self.map_y_range[0], self.map_y_range[1], 0, 99))
-        parent_x = round(self.env.scale(node.parent.point.x, self.map_x_range[0], self.map_x_range[1], 0, 99))
-        parent_y = round(self.env.scale(node.parent.point.y, self.map_y_range[0], self.map_y_range[1], 0, 99))
+        x = round(self.map.scale(node.point.x, self.map.x_min, self.map.x_max, 0, 99))
+        y = round(self.map.scale(node.point.y, self.map.y_min, self.map.y_max, 0, 99))
+        parent_x = round(self.map.scale(node.parent.point.x, self.map.x_min, self.map.x_max, 0, 99))
+        parent_y = round(self.map.scale(node.parent.point.y, self.map.y_min, self.map.y_max, 0, 99))
         new_point = Point(x, y, 0)
         parent = Point(parent_x, parent_y, 0)
         return new_point, parent
@@ -211,10 +207,10 @@ class RRT:
       return indices
 
     def is_collision(self, node):
-      if node.point.x < self.map_x_range[0] or \
-         node.point.x > self.map_x_range[1] or \
-         node.point.y < self.map_y_range[0] or \
-         node.point.y > self.map_y_range[1]:
+      if node.point.x < self.map.x_min or \
+         node.point.x > self.map.x_max or \
+         node.point.y < self.map.y_min or \
+         node.point.y > self.map.y_max:
         return True
       new_point, parent_point = self.coord_to_matrix(node)
       x1 = new_point.x 
@@ -224,18 +220,18 @@ class RRT:
       indices = self.get_line_segment(x1, y1, x2, y2)
 
       for x, y in indices:
-        x2 = round(self.env.scale(x, 0, 99, self.map_x_range[0], self.map_x_range[1]), 2)
-        y2 = round(self.env.scale(y, 0, 99, self.map_y_range[0], self.map_y_range[1]), 2) 
-        self.testing.points.append(Point(x2, y2, 0.3))
+        x2 = round(self.map.scale(x, 0, 99, self.map.x_min, self.map.x_max), 2)
+        y2 = round(self.map.scale(y, 0, 99, self.map.y_min, self.map.y_max), 2) 
+        self.bresenham.points.append(Point(x2, y2, 0.3))
         if x > 99 or y > 99:
           return True
-        elif math.isnan(self.env.elevation_matrix[x][y]):
-          print("nan")
+        # elif math.isnan(self.map.elevation_matrix[x][y]):
+        #   print('nan')
+        #   return True
+        elif self.map.elevation_matrix[x][y] > self.limit:
           return True
-        elif self.env.elevation_matrix[x][y] > self.limit:
-          return True
-        # print("height:", round(self.env.elevation_matrix[x][y], 2))
-      self.testing_pub.publish(self.testing)
+        # print('height:', round(self.map.elevation_matrix[x][y], 2))
+      self.bresenham_pub.publish(self.bresenham)
       return False
 
     def extract_path(self, node_end):
@@ -273,10 +269,16 @@ class RRT:
       
 
 def main():
-  rrt = RRT(1, 1000)
+  step_len = 1
+  iter_max = 1000
+  limit = 0.01
+  goal = Point(4, -5, 0)
+
+  rrt = RRT(step_len, iter_max, limit, goal)
+
   path = rrt.planning()
   if path:
-    print("Path Found!")
+    rospy.loginfo('Path Found!')
     while not rospy.is_shutdown():
        rrt.plot_path(path)
        rrt.marker_tree_pub.publish(rrt.marker_tree)

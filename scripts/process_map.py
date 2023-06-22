@@ -18,9 +18,8 @@ from yaml.loader import SafeLoader
 
 topic = '/elevation_map_raw_visualization/elevation_cloud'
 
-class EnvElevationMap:
+class elevationMap:
   def __init__(self):
-    rospy.init_node('ElevationGridmapEnv')
     self.resolution = None
     self.x_length = None
     self.y_length = None
@@ -58,7 +57,6 @@ class EnvElevationMap:
     self.elevation_map_subscriber = rospy.Subscriber(topic, PointCloud2, self.elevation_points_callback)
     rospy.loginfo('Waiting for PointCloud...')
     rospy.wait_for_message(topic, PointCloud2)
-    self.elevation_map_subscriber.unregister()
 
   # Get parameters from elevation map yaml file
   def get_map_params(self):
@@ -77,6 +75,7 @@ class EnvElevationMap:
     self.x_max = round(max(point.x for point in marker.points) - self.resolution / 2, 2)
     self.y_min = round(min(point.y for point in marker.points) + self.resolution / 2, 2)
     self.y_max = round(max(point.y for point in marker.points) - self.resolution / 2, 2)
+    self.elevation_map_region_sub.unregister()
 
   def elevation_points_callback(self, pc2_msg):
     array = ros_numpy.point_cloud2.pointcloud2_to_array(pc2_msg)
@@ -99,6 +98,7 @@ class EnvElevationMap:
     rospy.loginfo('Elevation matrix created...')
     # rospy.loginfo('Elevation matrix created. Next update in 3 sec...')
     # rospy.sleep(3)
+    self.elevation_map_subscriber.unregister()
 
   # Linear interpolation function 
   def scale(self, val, x1, y1, x2, y2):
@@ -113,7 +113,7 @@ class EnvElevationMap:
 
 # Run for testing
 if __name__ == '__main__':
-  env = EnvElevationMap()
+  env = elevationMap()
   while not rospy.is_shutdown():
     env.marker_pub.publish(env.marker)
 
