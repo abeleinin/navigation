@@ -40,6 +40,7 @@ class RRT:
       self.back_parent = self.start_node
       self.front_leaves = []
       self.back_leaves = []
+      self.goal_found = False
 
       ### Publishers ###
       self.frame = 'world'
@@ -101,8 +102,10 @@ class RRT:
 
         # check if a path was found
         if front_path != None:
+          self.goal_found = True
           return front_path
         elif back_path != None:
+          self.goal_found = True
           return back_path
 
         # random leaf selection 
@@ -114,7 +117,10 @@ class RRT:
         # self.front_parent = self.front_leaves.pop(0)
         # self.back_parent = self.back_leaves.pop(0)
 
-      return None
+      # return path nearest to node
+      leaves = self.front_leaves + self.back_leaves
+      nearest = self.nearest_to_goal(leaves)
+      return self.extract_path(nearest)
     
     def generate_leafs(self, branching, orientation, curr_parent, leaves):
       # generate random angles separated by delta
@@ -253,6 +259,17 @@ class RRT:
       dx = node_end.point.x - node_start.point.x
       dy = node_end.point.y - node_start.point.y
       return math.hypot(dx, dy), math.atan2(dy, dx)
+    
+    # find nearest leaf node to the goal node
+    def nearest_to_goal(self, leaves):
+      nearest_dist = 0
+      nearest_node = None
+      for node in leaves:
+        curr_dist, _ = self.get_distance_and_angle(node, self.goal_node)
+        if curr_dist < nearest_dist:
+          nearest_dist = curr_dist
+          nearest_node = node
+      return nearest_node
 
     def plot_path(self, nodes):
         path_msg = Path()
