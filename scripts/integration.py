@@ -77,7 +77,7 @@ class RRT:
       self.testing.color.b = 1.0
 
       self.start_point = self.jackal.position # Robot position 
-      self.goal_point = Point(0, -5, 0) # Goal
+      self.goal_point = Point(5, -5, 0) # Goal
 
       self.marker_dest.points.append(self.start_point)
       self.marker_dest.points.append(self.goal_point)
@@ -105,21 +105,28 @@ class RRT:
           print(i)
         # if math.log(count, 3).is_integer():
         #   self.step_len *= 1
-        front_path = self.generate_leafs(3, 0 + self.jackal.yaw, self.front_parent, self.front_leaves)
-        back_path = self.generate_leafs(3, 180 + self.jackal.yaw, self.back_parent, self.back_leaves)
 
+        # Find path in front of robot or behind 
+        if self.front_parent != None:
+          front_path = self.generate_leafs(3, 0 + self.jackal.yaw, self.front_parent, self.front_leaves)
+        if self.back_parent != None:
+          back_path = self.generate_leafs(3, 180 + self.jackal.yaw, self.back_parent, self.back_leaves)
+
+        # Check if a path was found
         if front_path != None:
           return front_path
         elif back_path != None:
           return back_path
 
+        # Random Leaf Node Selection 
+        # Determine the next parent node. If leaves list is empty then all leaves lead to a collision.
+        self.front_parent = self.front_leaves.pop(random.randint(0, len(self.front_leaves) - 1)) if self.front_leaves else None
+        self.back_parent = self.back_leaves.pop(random.randint(0, len(self.back_leaves) - 1)) if self.back_leaves else None
+
+        # Sequential Leaf Node Selection
         # self.front_parent = self.front_leaves.pop(0)
         # self.back_parent = self.back_leaves.pop(0)
-        if len(self.front_leaves) == 0 or len(self.back_leaves) == 0:
-          print("ZERO NOT GOOD")
-          continue
-        self.front_parent = self.front_leaves.pop(random.randint(0, len(self.front_leaves) - 1))
-        self.back_parent = self.back_leaves.pop(random.randint(0, len(self.back_leaves) - 1))
+
         count += 1
 
       return None
