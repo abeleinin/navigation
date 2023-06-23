@@ -41,6 +41,7 @@ class RRT:
       self.front_leaves = []
       self.back_leaves = []
       self.goal_found = False
+      self.path_msg = Path()
 
       ### Publishers ###
       self.frame = 'world'
@@ -114,8 +115,8 @@ class RRT:
         self.back_parent = self.back_leaves.pop(random.randint(0, len(self.back_leaves) - 1)) if self.back_leaves else None
 
         # sequential leaf selection
-        # self.front_parent = self.front_leaves.pop(0)
-        # self.back_parent = self.back_leaves.pop(0)
+        # self.front_parent = self.front_leaves.pop(0) if self.front_leaves else None
+        # self.back_parent = self.back_leaves.pop(0) if self.back_leaves else None
 
       # return path nearest to node
       leaves = self.front_leaves + self.back_leaves
@@ -151,7 +152,7 @@ class RRT:
         self.marker_tree_pub.publish(self.marker_tree)
         self.marker_dest_pub.publish(self.marker_dest)
         # sleep for visualization purposes
-        rospy.sleep(0.04)
+        rospy.sleep(0.01)
 
         # calculate euclidean distance from the new node to the goal
         dist, _ = self.get_distance_and_angle(new_node, self.goal_node)
@@ -240,18 +241,30 @@ class RRT:
       self.bresenham_pub.publish(self.bresenham)
       return False
 
-    def extract_path(self, node_end):
-      goal_point = Point(self.goal_node.point.x, self.goal_node.point.y, self.goal_node.point.z)
-      goal = Node(goal_point)
-      path = [goal]
-      node_now = node_end
+    # def extract_path(self, node_end):
+    #   goal_point = Point(self.goal_node.point.x, self.goal_node.point.y, self.goal_node.point.z)
+    #   goal = Node(goal_point)
+    #   path = [goal]
+    #   node_now = node_end
 
-      while node_now.parent is not None:
-        node_now = node_now.parent
-        self.marker.points.append(node_now.point)
-        new_point = Point(round(node_now.point.x, 1), round(node_now.point.y, 1), round(node_now.point.z, 1))
-        new_node = Node(new_point)
-        path.insert(0, new_node)
+    #   while node_now.parent is not None:
+    #     node_now = node_now.parent
+    #     self.marker.points.append(node_now.point)
+    #     new_point = Point(round(node_now.point.x, 1), round(node_now.point.y, 1), round(node_now.point.z, 1))
+    #     new_node = Node(new_point)
+    #     path.insert(0, new_node)
+
+    #   return path
+
+    def extract_path(self, curr_node):
+      path = [self.start_node]
+
+      while curr_node.parent is not None:
+        self.marker.points.append(curr_node.point)
+        curr_point = Point(round(curr_node.point.x, 1), round(curr_node.point.y, 1), round(curr_node.point.z, 1))
+        waypoint = Node(curr_point)
+        path.insert(1, waypoint)
+        curr_node = curr_node.parent
 
       return path
 
@@ -262,7 +275,7 @@ class RRT:
     
     # find nearest leaf node to the goal node
     def nearest_to_goal(self, leaves):
-      nearest_dist = 0
+      nearest_dist = float('inf')
       nearest_node = None
       for node in leaves:
         curr_dist, _ = self.get_distance_and_angle(node, self.goal_node)
@@ -272,32 +285,32 @@ class RRT:
       return nearest_node
 
     def plot_path(self, nodes):
-        path_msg = Path()
-        path_msg.header.frame_id = self.frame
+        self.path_msg.header.frame_id = self.frame
 
         for node in nodes:
           pose = PoseStamped()
           pose.header.frame_id = self.frame
           pose.pose.position = Point(node.point.x, node.point.y, 0.05)
-          path_msg.poses.append(pose)
+          self.path_msg.poses.append(pose)
         
-        self.path_pub.publish(path_msg)
-        return path_msg
+        self.path_pub.publish(self.path_msg)
+        return self.path_msg
       
 
 def main():
   step_len = 1
-  iter_max = 1000
+  iter_max = 50
   limit = 0.01
-  goal = Point(4, -5, 0)
+  goal = Point(7, -7, 0)
 
   rrt = RRT(step_len, iter_max, limit, goal)
 
   path = rrt.planning()
   if path:
     rospy.loginfo('Path Found!')
+    rrt.plot_path(path)
     while not rospy.is_shutdown():
-       rrt.plot_path(path)
+       rrt.path_pub.publish(rrt.path_msg)
        rrt.marker_tree_pub.publish(rrt.marker_tree)
        rrt.marker_pub.publish(rrt.marker)
        rrt.marker_dest_pub.publish(rrt.marker_dest)
