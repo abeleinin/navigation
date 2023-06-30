@@ -310,7 +310,7 @@ def main():
     rospy.loginfo('Path Found!')
     rrt.plot_path(path)
     while not rospy.is_shutdown():
-       rrt.path_pub.publish(rrt.path_msg)
+      #  rrt.path_pub.publish(rrt.path_msg)
        rrt.marker_tree_pub.publish(rrt.marker_tree)
        rrt.marker_pub.publish(rrt.marker)
        rrt.marker_dest_pub.publish(rrt.marker_dest)
