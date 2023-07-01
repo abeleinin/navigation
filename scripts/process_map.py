@@ -49,7 +49,7 @@ class elevationMap:
     self.marker.color.a = 1.0
     self.marker.color.r = 1.0
 
-    self.elevation_map_region_sub = rospy.Subscriber('/elevation_map_fused_visualization/map_region', Marker, self.map_region_callback)
+    self.elevation_map_region_sub = rospy.Subscriber('/elevation_map_fused_visualization/map_region', Marker, self.map_region_callback) #, queue_size=1)
     rospy.loginfo('Waiting for map region...')
     rospy.wait_for_message('/elevation_map_fused_visualization/map_region', Marker)
     rospy.loginfo('World x min/max ' + str(self.x_min) + ', ' + str(self.x_max))
@@ -61,7 +61,7 @@ class elevationMap:
   # Get parameters from elevation map yaml file
   def get_map_params(self):
     curr_dir = os.getcwd()
-    path = os.path.join(curr_dir, '..', 'config/elevation_maps/simple_demo_map.yaml')
+    path = os.path.join(curr_dir, '..', '..', 'config/elevation_maps/simple_demo_map.yaml')
     with open(path) as f:
         data = yaml.load(f, Loader=SafeLoader)
         self.resolution = data['resolution']
