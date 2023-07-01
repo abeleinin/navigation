@@ -32,18 +32,15 @@ class FollowPathClient:
       rospy.loginfo('FollowPathClient started...')
       rospy.wait_for_service('follow_path_service')
 
-      # retrieve environmental and robot information
-
-      ### parameters ###
+      ### initialize global parameters ###
       self.step_len = step_len
       self.iter_max = iter_max
       self.limit = elev_limit
       self.goal_point = goal
+      self.goal_node = Node(self.goal_point)
       self.goal_found = False
-
-      ### global variables ###
       self.nearest = None
-      self.init()
+      self.init_params()
 
       self.follow_path = rospy.ServiceProxy('follow_path_service', FollowPath)
 
@@ -51,7 +48,7 @@ class FollowPathClient:
       self.frame = 'world'
       self.path_pub = rospy.Publisher('/world/path', Path, queue_size=10)
 
-      # All nodes
+      # all nodes
       self.marker_pub = rospy.Publisher('/world/nodes', Marker, queue_size=10)
       self.marker = Marker()
       self.marker.header.frame_id = self.frame
@@ -94,18 +91,15 @@ class FollowPathClient:
       self.bresenham.scale = Vector3(0.1, 0.1, 0)
       self.bresenham.color = ColorRGBA(0, 0, 1, 1) # blue
 
-    def init(self):
-      rospy.loginfo("FollowPathClient: Init params...")
+    def init_params(self):
+      rospy.loginfo("FollowPathClient: Initialize params...")
+      # initialize elevation map and jackal location (needed for yaw calculation)
       self.map = elevationMap()
-
-      if self.nearest:
-        self.start_point = self.nearest.point
-      else:
-        self.jackal = robotOdom()
-        self.start_point = self.jackal.position 
-
+      self.jackal = robotOdom()
+      # start node is jackal position at initialization then nearest node to goal if additional iterations
+      self.start_point = self.nearest.point if self.nearest else self.jackal.position
+      # self.start_node = self.nearest if self.nearest else Node(self.jackal.position)
       self.start_node = Node(self.start_point)
-      self.goal_node = Node(self.goal_point)
       self.front_parent = self.start_node
       self.back_parent = self.start_node
       self.front_leaves = []
@@ -144,7 +138,6 @@ class FollowPathClient:
       leaves = self.front_leaves + self.back_leaves
       self.nearest = self.nearest_to_goal(leaves)
       return self.extract_path(self.nearest)
-
 
     def forward_planning(self):
       for i in range(self.iter_max):
@@ -199,23 +192,20 @@ class FollowPathClient:
         self.marker_dest_pub.publish(self.marker_dest)
 
         # sleep for visualization purposes
-        rospy.sleep(0.0001)
+        rospy.sleep(0.00001)
 
         # calculate euclidean distance from the new node to the goal
         dist, _ = self.get_distance_and_angle(new_node, self.goal_node)
         if dist <= self.step_len:
-          dist, theta = self.get_distance_and_angle(new_node, self.goal_node)
-
-          dist = min(self.step_len, dist)
           # create final node
-          final_point = self.goal_point
-          final_node = Node(final_point)
-          final_node.parent = new_node.parent
+          self.goal_node.parent = new_node.parent
           # add to visualization arrays
-          self.marker_tree.points.append(final_node.parent.point)
-          self.marker_tree.points.append(final_node.point)
+          self.marker_tree.points.append(self.goal_node.parent.point)
+          self.marker_tree.points.append(self.goal_node.point)
+          self.marker_tree_pub.publish(self.marker_tree)
+          self.marker_dest_pub.publish(self.marker_dest)
           # return the list of nodes to goal found by recursing through each nodes parent
-          return self.extract_path(final_node)
+          return self.extract_path(self.goal_node)
         else: 
           # appends to list of all possible leaf nodes
           leaves.append(new_node)
@@ -276,12 +266,8 @@ class FollowPathClient:
         self.bresenham.points.append(Point(x2, y2, 0.3))
         if x > self.map.x_range - 1 or y > self.map.x_range - 1:
           return True
-        # elif math.isnan(self.map.elevation_matrix[x][y]):
-        #   print('nan')
-        #   return True
         elif self.map.elevation_matrix[x][y] > self.limit:
           return True
-        # print('height:', round(self.map.elevation_matrix[x][y], 2))
       self.bresenham_pub.publish(self.bresenham)
       return False
 
@@ -330,33 +316,27 @@ class FollowPathClient:
         
       self.path_pub.publish(self.path_msg)
       return self.path_msg
-    
+
     def handle_follow_path(self):
       try:
-        nodes = self.planning()
-        if nodes:
-          rospy.loginfo('Path Found!')
-          path = self.plot_path(nodes)
-
-          req = FollowPathRequest()
-          req.path = path
-          
-          print("Waiting for response")
-          response = self.follow_path(req)
-          print(response)
-
-          while not self.goal_found:
+        req = FollowPathRequest()
+        while not self.goal_found:
+          if not self.nearest:
+            rospy.loginfo("Initial RRT Branching...")
+            nodes = self.planning()
+            req.path = self.plot_path(nodes)
+          else:
             rospy.sleep(0.5)
-            self.init()
+            self.init_params()
+            rospy.loginfo("RRT Forward Branching...")
             nodes = self.forward_planning()
             req.path = self.plot_path(nodes)
-            response = self.follow_path(req)
-          
-          print("CLIENT: Goal Achieved")
 
-            # nodes = self.planning()
-            # path = self.plot_path(nodes)
-            # req.path = path
+          rospy.loginfo("Awaiting response from FollowPathServer...")
+          # Send request to FollowPathServer. Code with hang awaiting response
+          self.follow_path(req)
+
+        rospy.loginfo("RRT Goal Achieved...")
 
       except rospy.ServiceException as e:
         rospy.logerr("Service call failed:", e)
@@ -365,7 +345,7 @@ class FollowPathClient:
 def main():
   # Initialize FollowPath Client
   step_len = 1
-  iter_max = 50
+  iter_max = 100
   limit = 0.01
   goal = Point(7, -3, 0)
 

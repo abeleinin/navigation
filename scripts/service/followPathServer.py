@@ -68,22 +68,23 @@ class FollowPathServer:
       self.path.poses[i + 1].pose.orientation.w = q[3]
 
   def process_path(self, path):
-    rospy.loginfo('Path received')
     self.path = path 
     for _ in path.poses:
       self.path_length += 1
+    rospy.loginfo('Path of length ' + str(self.path_length - 1) + ' received')
     self.generate_quaternion()
     self.publish_next_goal()
   
   def publish_next_goal(self):
-    rospy.loginfo('Going to point: ' + str(self.i))
-    self.driver.publish(self.path.poses[self.i])
+    goal = self.path.poses[self.i]
+    point = 'Point(' + str(goal.pose.position.x) + ", " + str(goal.pose.position.y) + ") "
+    rospy.loginfo(point + str(self.i) + ' of ' + str(self.path_length - 1))
+    self.driver.publish(goal)
     self.i += 1
 
   def distance_to_goal_callback(self, dist):
     if dist.data <= Float32(0.2).data:
       if self.i > (self.path_length - 1):
-        print("Server: Goal Achieved")
         self.goal_reached = True
         return 
       self.publish_next_goal()
@@ -91,7 +92,7 @@ class FollowPathServer:
   def goal_achieved_callback(self, achieved):
     if achieved.data:
       if self.i > (self.path_length - 1):
-        rospy.loginfo('FollowPath: distance_to_goal unregistered...')
+        rospy.loginfo('FollowPathServer: goal_achieved unregistered...')
         self.goal_reached = True
         return 
       self.publish_next_goal()
