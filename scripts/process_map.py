@@ -16,7 +16,8 @@ import yaml
 from yaml.loader import SafeLoader
 
 
-topic = '/elevation_map_raw_visualization/elevation_cloud'
+elevation_topic = '/elevation_map_raw_visualization/elevation_cloud'
+map_region_topic = '/elevation_map_fused_visualization/map_region'
 
 class elevationMap:
   def __init__(self):
@@ -49,14 +50,14 @@ class elevationMap:
     self.marker.color.a = 1.0
     self.marker.color.r = 1.0
 
-    self.elevation_map_region_sub = rospy.Subscriber('/elevation_map_fused_visualization/map_region', Marker, self.map_region_callback) #, queue_size=1)
+    self.elevation_map_region_sub = rospy.Subscriber(map_region_topic, Marker, self.map_region_callback)
     rospy.loginfo('Waiting for map region...')
-    rospy.wait_for_message('/elevation_map_fused_visualization/map_region', Marker)
+    rospy.wait_for_message(map_region_topic, Marker)
     rospy.loginfo('World x min/max ' + str(self.x_min) + ', ' + str(self.x_max))
     rospy.loginfo('World y min/max ' + str(self.y_min) + ', ' + str(self.y_max))
-    self.elevation_map_subscriber = rospy.Subscriber(topic, PointCloud2, self.elevation_points_callback)
+    self.elevation_map_subscriber = rospy.Subscriber(elevation_topic, PointCloud2, self.elevation_points_callback, queue_size=1)
     rospy.loginfo('Waiting for PointCloud...')
-    rospy.wait_for_message(topic, PointCloud2)
+    rospy.wait_for_message(elevation_topic, PointCloud2)
 
   # Get parameters from elevation map yaml file
   def get_map_params(self):
@@ -75,7 +76,7 @@ class elevationMap:
     self.x_max = round(max(point.x for point in marker.points) - self.resolution / 2, 2)
     self.y_min = round(min(point.y for point in marker.points) + self.resolution / 2, 2)
     self.y_max = round(max(point.y for point in marker.points) - self.resolution / 2, 2)
-    self.elevation_map_region_sub.unregister()
+    # self.elevation_map_region_sub.unregister()
 
   def elevation_points_callback(self, pc2_msg):
     array = ros_numpy.point_cloud2.pointcloud2_to_array(pc2_msg)
@@ -85,9 +86,12 @@ class elevationMap:
     matrix = [[0] * int(self.y_range) for _ in range(int(self.x_range))]
     for point in array:
       # self.marker.points.append(Point(point[0], point[1], point[2]))
-      i = self.scale(point[0].item(), self.x_min, self.x_max, 0, self.x_range - 1)
-      j = self.scale(point[1].item(), self.y_min, self.y_max, 0, self.x_range - 1)
+      i = self.scale(round(point[0].item(), 2), self.x_min, self.x_max, 0, self.x_range - 1)
+      j = self.scale(round(point[1].item(), 2), self.y_min, self.y_max, 0, self.x_range - 1)
       height = round(point[2].item(), 2)
+      # print(point[0].item())
+      # print(point[1].item())
+      # print(int(i), int(j))
       matrix[int(i)][int(j)] = height
     
     self.elevation_matrix = matrix
@@ -97,8 +101,8 @@ class elevationMap:
     # self.marker_pub.publish(self.marker) 
     rospy.loginfo('Elevation matrix created...')
     # rospy.loginfo('Elevation matrix created. Next update in 3 sec...')
-    # rospy.sleep(3)
-    self.elevation_map_subscriber.unregister()
+    rospy.sleep(1)
+    # self.elevation_map_subscriber.unregister()
 
   # Linear interpolation function 
   def scale(self, val, x1, y1, x2, y2):

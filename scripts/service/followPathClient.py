@@ -20,8 +20,6 @@ from process_map import elevationMap
 from robot_odom import robotOdom
 from rrt_package.srv import FollowPath, FollowPathRequest 
 
-from followPathServer import FollowPathServer
-
 class Node:
     def __init__(self, point: Point):
       self.point = point 
@@ -283,21 +281,6 @@ class FollowPathClient:
         # print('height:', round(self.map.elevation_matrix[x][y], 2))
       self.bresenham_pub.publish(self.bresenham)
       return False
-
-    # def extract_path(self, node_end):
-    #   goal_point = Point(self.goal_node.point.x, self.goal_node.point.y, self.goal_node.point.z)
-    #   goal = Node(goal_point)
-    #   path = [goal]
-    #   node_now = node_end
-
-    #   while node_now.parent is not None:
-    #     node_now = node_now.parent
-    #     self.marker.points.append(node_now.point)
-    #     new_point = Point(round(node_now.point.x, 1), round(node_now.point.y, 1), round(node_now.point.z, 1))
-    #     new_node = Node(new_point)
-    #     path.insert(0, new_node)
-
-    #   return path
 
     def extract_path(self, curr_node):
       path = [self.start_node]

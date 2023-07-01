@@ -42,7 +42,7 @@ class FollowPathServer:
 
     response = FollowPathResponse()
 
-    rospy.loginfo('FollowPath: distance_to_goal unregistered...')
+    # rospy.loginfo('FollowPath: distance_to_goal unregistered...')
     # self.distance_to_goal.unregister()
     self.goal_achieved.unregister()
     reached = True
