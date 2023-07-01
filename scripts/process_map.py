@@ -17,7 +17,7 @@ from yaml.loader import SafeLoader
 
 
 elevation_topic = '/elevation_map_raw_visualization/elevation_cloud'
-map_region_topic = '/elevation_map_fused_visualization/map_region'
+map_region_topic = '/elevation_map_raw_visualization/map_region'
 
 class elevationMap:
   def __init__(self):
@@ -76,7 +76,7 @@ class elevationMap:
     self.x_max = round(max(point.x for point in marker.points) - self.resolution / 2, 2)
     self.y_min = round(min(point.y for point in marker.points) + self.resolution / 2, 2)
     self.y_max = round(max(point.y for point in marker.points) - self.resolution / 2, 2)
-    # self.elevation_map_region_sub.unregister()
+    self.elevation_map_region_sub.unregister()
 
   def elevation_points_callback(self, pc2_msg):
     array = ros_numpy.point_cloud2.pointcloud2_to_array(pc2_msg)
@@ -101,8 +101,8 @@ class elevationMap:
     # self.marker_pub.publish(self.marker) 
     rospy.loginfo('Elevation matrix created...')
     # rospy.loginfo('Elevation matrix created. Next update in 3 sec...')
-    rospy.sleep(1)
-    # self.elevation_map_subscriber.unregister()
+    # rospy.sleep(1)
+    self.elevation_map_subscriber.unregister()
 
   # Linear interpolation function 
   def scale(self, val, x1, y1, x2, y2):

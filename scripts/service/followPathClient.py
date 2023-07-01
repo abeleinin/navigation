@@ -42,6 +42,7 @@ class FollowPathClient:
       self.goal_found = False
 
       ### global variables ###
+      self.nearest = None
       self.init()
 
       self.follow_path = rospy.ServiceProxy('follow_path_service', FollowPath)
@@ -96,9 +97,13 @@ class FollowPathClient:
     def init(self):
       rospy.loginfo("FollowPathClient: Init params...")
       self.map = elevationMap()
-      self.jackal = robotOdom()
-      self.start_point = self.jackal.position 
-      print(self.start_point)
+
+      if self.nearest:
+        self.start_point = self.nearest.point
+      else:
+        self.jackal = robotOdom()
+        self.start_point = self.jackal.position 
+
       self.start_node = Node(self.start_point)
       self.goal_node = Node(self.goal_point)
       self.front_parent = self.start_node
@@ -137,8 +142,8 @@ class FollowPathClient:
 
       # return path nearest to node
       leaves = self.front_leaves + self.back_leaves
-      nearest = self.nearest_to_goal(leaves)
-      return self.extract_path(nearest)
+      self.nearest = self.nearest_to_goal(leaves)
+      return self.extract_path(self.nearest)
 
 
     def forward_planning(self):
@@ -161,8 +166,8 @@ class FollowPathClient:
 
       # return path nearest to node
       leaves = self.front_leaves + self.back_leaves
-      nearest = self.nearest_to_goal(leaves)
-      return self.extract_path(nearest)   
+      self.nearest = self.nearest_to_goal(leaves)
+      return self.extract_path(self.nearest)
 
     def generate_leafs(self, branching, orientation, curr_parent, leaves):
       # generate random angles separated by delta
@@ -192,8 +197,9 @@ class FollowPathClient:
         self.marker_tree.points.append(Point(new_node.parent.point.x, new_node.parent.point.y, 0.05))
         self.marker_tree_pub.publish(self.marker_tree)
         self.marker_dest_pub.publish(self.marker_dest)
+
         # sleep for visualization purposes
-        rospy.sleep(0.01)
+        rospy.sleep(0.0001)
 
         # calculate euclidean distance from the new node to the goal
         dist, _ = self.get_distance_and_angle(new_node, self.goal_node)
@@ -202,17 +208,14 @@ class FollowPathClient:
 
           dist = min(self.step_len, dist)
           # create final node
-          final_point = Point(new_node.point.x + dist * math.cos(theta), 
-                              new_node.point.y + dist * math.sin(theta), 0)
-          # ??? isn't final_node just the goal node
-          # ??? new_node.parent might be more correct (test)
+          final_point = self.goal_point
           final_node = Node(final_point)
-          final_node.parent = new_node
+          final_node.parent = new_node.parent
           # add to visualization arrays
-          self.marker_tree.points.append(new_node.parent.point)
+          self.marker_tree.points.append(final_node.parent.point)
           self.marker_tree.points.append(final_node.point)
           # return the list of nodes to goal found by recursing through each nodes parent
-          return self.extract_path(new_node)
+          return self.extract_path(final_node)
         else: 
           # appends to list of all possible leaf nodes
           leaves.append(new_node)
@@ -314,7 +317,7 @@ class FollowPathClient:
       while not rospy.is_shutdown():
         self.marker_tree_pub.publish(self.marker_tree)
         self.marker_pub.publish(self.marker)
-        self.marker_dest_pub.puublish(self.marker_dest)
+        self.marker_dest_pub.publish(self.marker_dest)
 
     def plot_path(self, nodes):
       self.path_msg.header.frame_id = self.frame
@@ -343,7 +346,7 @@ class FollowPathClient:
           print(response)
 
           while not self.goal_found:
-            rospy.sleep(2)
+            rospy.sleep(0.5)
             self.init()
             nodes = self.forward_planning()
             req.path = self.plot_path(nodes)

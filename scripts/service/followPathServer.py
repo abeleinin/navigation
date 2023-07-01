@@ -77,7 +77,6 @@ class FollowPathServer:
   
   def publish_next_goal(self):
     rospy.loginfo('Going to point: ' + str(self.i))
-    print(self.path.poses[self.i].pose.position)
     self.driver.publish(self.path.poses[self.i])
     self.i += 1
 
