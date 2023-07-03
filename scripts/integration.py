@@ -152,7 +152,7 @@ class RRT:
         self.marker_tree_pub.publish(self.marker_tree)
         self.marker_dest_pub.publish(self.marker_dest)
         # sleep for visualization purposes
-        rospy.sleep(0.01)
+        # rospy.sleep(0.01)
 
         # calculate euclidean distance from the new node to the goal
         dist, _ = self.get_distance_and_angle(new_node, self.goal_node)
@@ -241,21 +241,6 @@ class RRT:
       self.bresenham_pub.publish(self.bresenham)
       return False
 
-    # def extract_path(self, node_end):
-    #   goal_point = Point(self.goal_node.point.x, self.goal_node.point.y, self.goal_node.point.z)
-    #   goal = Node(goal_point)
-    #   path = [goal]
-    #   node_now = node_end
-
-    #   while node_now.parent is not None:
-    #     node_now = node_now.parent
-    #     self.marker.points.append(node_now.point)
-    #     new_point = Point(round(node_now.point.x, 1), round(node_now.point.y, 1), round(node_now.point.z, 1))
-    #     new_node = Node(new_point)
-    #     path.insert(0, new_node)
-
-    #   return path
-
     def extract_path(self, curr_node):
       path = [self.start_node]
 
@@ -306,14 +291,15 @@ def main():
   rrt = RRT(step_len, iter_max, limit, goal)
 
   path = rrt.planning()
+  rospy.sleep(0.4)
   if path:
     rospy.loginfo('Path Found!')
     rrt.plot_path(path)
-    while not rospy.is_shutdown():
-      #  rrt.path_pub.publish(rrt.path_msg)
-       rrt.marker_tree_pub.publish(rrt.marker_tree)
-       rrt.marker_pub.publish(rrt.marker)
-       rrt.marker_dest_pub.publish(rrt.marker_dest)
+    # while not rospy.is_shutdown():
+    #   #  rrt.path_pub.publish(rrt.path_msg)
+    #    rrt.marker_tree_pub.publish(rrt.marker_tree)
+    #    rrt.marker_pub.publish(rrt.marker)
+    #    rrt.marker_dest_pub.publish(rrt.marker_dest)
       
 if __name__ == '__main__':
   main()

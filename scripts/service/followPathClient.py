@@ -98,12 +98,16 @@ class FollowPathClient:
       self.jackal = robotOdom()
       # start node is jackal position at initialization then nearest node to goal if additional iterations
       self.start_point = self.nearest.point if self.nearest else self.jackal.position
-      # self.start_node = self.nearest if self.nearest else Node(self.jackal.position)
-      self.start_node = Node(self.start_point)
+      # self.start_node = Node(self.start_point)
+      self.start_node = self.nearest if self.nearest else Node(self.jackal.position)
       self.front_parent = self.start_node
       self.back_parent = self.start_node
+      self.front_taken = False
+      self.back_taken = False
+      self.direction_offset = 180 if self.back_taken else 0
       self.front_leaves = []
       self.back_leaves = []
+      self.beyond_leaves = []
       self.path_msg = Path()
      
     def planning(self):
@@ -120,9 +124,11 @@ class FollowPathClient:
         # check if a path was found
         if front_path != None:
           self.goal_found = True
+          self.front_taken = True
           return front_path
         elif back_path != None:
           self.goal_found = True
+          self.back_taken = True
           return back_path
 
         # random leaf selection 
@@ -135,8 +141,11 @@ class FollowPathClient:
         # self.back_parent = self.back_leaves.pop(0) if self.back_leaves else None
 
       # return path nearest to node
-      leaves = self.front_leaves + self.back_leaves
+      leaves = self.front_leaves + self.back_leaves + self.beyond_leaves
       self.nearest = self.nearest_to_goal(leaves)
+      self.nearest.angle = 0
+      print("Jackal:", self.jackal.yaw)
+      print("Nearest:", self.nearest.angle)
       return self.extract_path(self.nearest)
 
     def forward_planning(self):
@@ -146,7 +155,7 @@ class FollowPathClient:
 
         # find path in front or behind robot
         if self.front_parent != None:
-          front_path = self.generate_leafs(3, 0 + self.jackal.yaw, self.front_parent, self.front_leaves)
+          front_path = self.generate_leafs(3, self.direction_offset + self.jackal.yaw, self.front_parent, self.front_leaves)
 
         # check if a path was found
         if front_path != None:
@@ -158,8 +167,9 @@ class FollowPathClient:
         self.front_parent = self.front_leaves.pop(random.randint(0, len(self.front_leaves) - 1)) if self.front_leaves else None
 
       # return path nearest to node
-      leaves = self.front_leaves + self.back_leaves
+      leaves = self.front_leaves + self.back_leaves + self.beyond_leaves
       self.nearest = self.nearest_to_goal(leaves)
+      print("Nearest:", self.nearest.angle)
       return self.extract_path(self.nearest)
 
     def generate_leafs(self, branching, orientation, curr_parent, leaves):
@@ -265,6 +275,7 @@ class FollowPathClient:
         y2 = round(self.map.scale(y, 0, self.map.x_range - 1, self.map.y_min, self.map.y_max), 2) 
         self.bresenham.points.append(Point(x2, y2, 0.3))
         if x > self.map.x_range - 1 or y > self.map.x_range - 1:
+          self.beyond_leaves.append(node)
           return True
         elif self.map.elevation_matrix[x][y] > self.limit:
           return True
@@ -274,11 +285,13 @@ class FollowPathClient:
     def extract_path(self, curr_node):
       path = [self.start_node]
 
-      while curr_node.parent is not None:
+      while curr_node.parent.point is not None:
         self.marker.points.append(curr_node.point)
         curr_point = Point(round(curr_node.point.x, 1), round(curr_node.point.y, 1), round(curr_node.point.z, 1))
         waypoint = Node(curr_point)
         path.insert(1, waypoint)
+        if curr_node.parent.point == self.start_node.point:
+          return path
         curr_node = curr_node.parent
 
       return path
@@ -319,6 +332,7 @@ class FollowPathClient:
 
     def handle_follow_path(self):
       try:
+        start = self.start_node
         req = FollowPathRequest()
         while not self.goal_found:
           if not self.nearest:
@@ -336,6 +350,9 @@ class FollowPathClient:
           # Send request to FollowPathServer. Code with hang awaiting response
           self.follow_path(req)
 
+        self.start_node = start
+        self.path_msg = Path()
+        self.plot_path(self.extract_path(self.goal_node))
         rospy.loginfo("RRT Goal Achieved...")
 
       except rospy.ServiceException as e:
@@ -345,7 +362,7 @@ class FollowPathClient:
 def main():
   # Initialize FollowPath Client
   step_len = 1
-  iter_max = 100
+  iter_max = 50
   limit = 0.01
   goal = Point(7, -3, 0)
 

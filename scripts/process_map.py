@@ -63,6 +63,7 @@ class elevationMap:
   def get_map_params(self):
     curr_dir = os.getcwd()
     path = os.path.join(curr_dir, '..', '..', 'config/elevation_maps/simple_demo_map.yaml')
+    # path = os.path.join(curr_dir, '..', 'config/elevation_maps/simple_demo_map.yaml')
     with open(path) as f:
         data = yaml.load(f, Loader=SafeLoader)
         self.resolution = data['resolution']
