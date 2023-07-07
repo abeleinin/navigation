@@ -20,10 +20,14 @@ from process_map import elevationMap
 from robot_odom import robotOdom
 from rrt_package.srv import FollowPath, FollowPathRequest 
 
+from tf.transformations import quaternion_from_euler
+
 class Node:
     def __init__(self, point: Point):
       self.point = point 
-      self.angle = 0
+      self.global_angle = 0
+      self.relative_angle = 0
+      self.curr_length = 0
       self.parent = None
 
 class FollowPathClient:
@@ -141,11 +145,13 @@ class FollowPathClient:
         # self.back_parent = self.back_leaves.pop(0) if self.back_leaves else None
 
       # return path nearest to node
+      if len(self.front_leaves) == 0 and len(self.back_leaves) == 0 and len(self.beyond_leaves) == 0:
+        rospy.logerr("No available leaf nodes")
       leaves = self.front_leaves + self.back_leaves + self.beyond_leaves
       self.nearest = self.nearest_to_goal(leaves)
-      self.nearest.angle = 0
-      print("Jackal:", self.jackal.yaw)
-      print("Nearest:", self.nearest.angle)
+      if self.nearest == None:
+        rospy.logerr("Nearest Null")
+      self.nearest.global_angle = 0
       return self.extract_path(self.nearest)
 
     def forward_planning(self):
@@ -169,7 +175,7 @@ class FollowPathClient:
       # return path nearest to node
       leaves = self.front_leaves + self.back_leaves + self.beyond_leaves
       self.nearest = self.nearest_to_goal(leaves)
-      print("Nearest:", self.nearest.angle)
+      self.nearest.global_angle = 0
       return self.extract_path(self.nearest)
 
     def generate_leafs(self, branching, orientation, curr_parent, leaves):
@@ -184,11 +190,13 @@ class FollowPathClient:
       # angles = [-60, -45, 0, 45, 60] 
       for angle in angles:
         # calculate new Point(x, y) values for a branch of length step_len at the specified angle using trig 
-        x = curr_parent.point.x + self.step_len * math.cos(math.radians(angle + curr_parent.angle + orientation))
-        y = curr_parent.point.y + self.step_len * math.sin(math.radians(angle + curr_parent.angle + orientation))
+        x = curr_parent.point.x + self.step_len * math.cos(math.radians(angle + curr_parent.global_angle + orientation))
+        y = curr_parent.point.y + self.step_len * math.sin(math.radians(angle + curr_parent.global_angle + orientation))
         new_node = Node(Point(x, y, 0.05))
         new_node.parent = curr_parent
-        new_node.angle = angle + curr_parent.angle
+        new_node.global_angle = angle + curr_parent.global_angle
+        new_node.relative_angle = angle + orientation
+        new_node.curr_length = curr_parent.curr_length + 1
         
         # check for collision between the new line segment created and the elevation map
         collision = self.is_collision(new_node)
@@ -325,6 +333,11 @@ class FollowPathClient:
         pose = PoseStamped()
         pose.header.frame_id = self.frame
         pose.pose.position = Point(node.point.x, node.point.y, 0.05)
+        q = quaternion_from_euler(0, 0, node.relative_angle)
+        pose.pose.orientation.x = q[0]
+        pose.pose.orientation.y = q[1]
+        pose.pose.orientation.z = q[2]
+        pose.pose.orientation.w = q[3]
         self.path_msg.poses.append(pose)
         
       self.path_pub.publish(self.path_msg)
@@ -340,7 +353,7 @@ class FollowPathClient:
             nodes = self.planning()
             req.path = self.plot_path(nodes)
           else:
-            rospy.sleep(0.5)
+            # rospy.sleep(0.5)
             self.init_params()
             rospy.loginfo("RRT Forward Branching...")
             nodes = self.forward_planning()
@@ -362,7 +375,7 @@ class FollowPathClient:
 def main():
   # Initialize FollowPath Client
   step_len = 1
-  iter_max = 50
+  iter_max = 30
   limit = 0.01
   goal = Point(7, -3, 0)
 

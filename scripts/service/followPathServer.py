@@ -54,25 +54,11 @@ class FollowPathServer:
     response.achieved = Bool(reached)
     return response
 
-  def generate_quaternion(self):
-    for i in range(self.path_length - 1):
-      x1 = self.path.poses[i].pose.position.x
-      y1 = self.path.poses[i].pose.position.y
-      x2 = self.path.poses[i + 1].pose.position.x
-      y2 = self.path.poses[i + 1].pose.position.y
-      yaw = math.atan2((y2 - y1), (x2 - x1))
-      q = quaternion_from_euler(0, 0, yaw)
-      self.path.poses[i + 1].pose.orientation.x = q[0]
-      self.path.poses[i + 1].pose.orientation.y = q[1]
-      self.path.poses[i + 1].pose.orientation.z = q[2]
-      self.path.poses[i + 1].pose.orientation.w = q[3]
-
   def process_path(self, path):
     self.path = path 
     for _ in path.poses:
       self.path_length += 1
     rospy.loginfo('Path of length ' + str(self.path_length - 1) + ' received')
-    self.generate_quaternion()
     self.publish_next_goal()
   
   def publish_next_goal(self):
